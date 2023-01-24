@@ -8,6 +8,8 @@ The current breakdown is meant to capture the dynamics of currently circulating 
 
 ![overview_h3n2](figures/2023-01_h3n2_overview.png)
 
+These clades can be assigned to HA sequences using [Nextclade](https://clades.nextstrain.org/?dataset-name=flu_h3n2_ha).
+
 ### Subclades
 
  * **Clade 1**
@@ -50,5 +52,31 @@ The current breakdown is meant to capture the dynamics of currently circulating 
     * **Clade 2d**:
         * additional mutations: G62R, H156Q, S199P
         * comment: mostly extinct
+
+## H1N1pdm
+
+Global circulation is completely dominated by 6B.1A.5 and its descendants. The abbreviated clade names therefore drop the prefix _6B.1A_.
+Clade 5a, defined by HA1 substitutions N129D and T185I on top of 6B.1A.5, had split into two long-lived clades broken up further below.
+
+![overview_h1n1pdm](figures/2023-01_h1n1pdm_overview.png)
+
+These clades can be assigned to HA sequences using [Nextclade](https://clades.nextstrain.org/?dataset-name=flu_h1n1pdm_ha).
+
+
+### Subclades
+
+ * **Clade 5a.1**
+    * additional mutations: D187A, Q189E
+    * vaccine strain: A/Guangdong-Maonan/SWL1536/2019 and A/Hawaii/70/2019
+ * **Clade 5a.2**
+    * additional mutations: N156K, L161I, V250A
+    * vaccine strain: A/Singapore/TT0886/2019 and A/Wisconsin/588/2019
+    * **Clade 5a.2a**
+        * additional mutations: K54Q, A186T, Q189E,  E224A, R259K, K308R
+        * **Clade 5a.2a.1**
+            * additional mutations: P137S, K142R, D260E
+
+
+
 
 
