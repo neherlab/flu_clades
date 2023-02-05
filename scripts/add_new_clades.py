@@ -1,7 +1,5 @@
 import json, argparse
 from collections import defaultdict
-from config.weights import weights
-from config.clade_map import aliases
 import numpy as np
 
 def label_backbone(tree, key):
@@ -167,14 +165,27 @@ if __name__=="__main__":
     parser.add_argument('--input', help="json to assign clades to")
     parser.add_argument('--lineage', default='h3n2', help="json to assign clades to")
     parser.add_argument('--add-to-existing', action='store_true', help="respect old clades")
+    parser.add_argument('--clade-map',help="json with renamed clades")
+    parser.add_argument('--weights',help="json with mutation weights")
     parser.add_argument("--old-key", type=str, help='name to save clades under')
     parser.add_argument("--new-key", type=str, help='name to save clades under')
     parser.add_argument('--output', default='recladed_tree.json')
 
     args = parser.parse_args()
 
+    with open(args.clade_map) as fh:
+        old_to_new_clades = json.load(fh)
+    with open(args.weights) as fh:
+        weights = json.load(fh)
+
     with open(args.input) as fh:
         data = json.load(fh)
+
+    aliases = {}
+    for k,v in old_to_new_clades.items():
+        if len(v[0])==1:
+            aliases[tuple(v[1])] = v[0]
+    short_to_full_clades = {v[0]:v[1] for v in old_to_new_clades.values()}
 
     T = data["tree"]
     max_date, min_date = 2030,2010
