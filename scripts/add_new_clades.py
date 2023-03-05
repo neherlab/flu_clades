@@ -2,6 +2,7 @@ import json, argparse
 from collections import defaultdict
 import numpy as np
 
+
 def label_backbone(tree, key):
     def label_backbone_recursive(n, key):
         on_backbone = False
@@ -84,18 +85,26 @@ def gather_tip_counts(n, attenuate=None, max_value=0, ignore_backbone=False):
 
     return max_value
 
-def score(n, weights=None, ntip_scale=1, ignore_backbone=False):
+def score(n, weights=None, ntip_scale=1, ignore_backbone=False, genes=None, core_genes=None):
     if weights is None:
         weights = {}
+    if genes is None:
+        genes = []
+    if core_genes is None:
+        core_genes = []
 
+    n['tip_score'] = np.sqrt(max(0,n['ntips']-1)/ntip_scale)
     if ignore_backbone and n['backbone']:
         return 0.0
-    elif sum([len(n['branch_attrs']['mutations'].get(gene,[])) for gene in ['HA1', 'HA2']])==0:
+    elif sum([len(n['branch_attrs']['mutations'].get(gene,[])) for gene in genes])==0:
         return 0.0
 
-    score = np.sqrt(n['ntips']/ntip_scale)
-    mut_weight = sum([weights.get(int(x[1:-1]),1)
-                    for x in n['branch_attrs']['mutations'].get('HA1',[])])
+    score = n['tip_score']
+    mut_weight = 0
+    for gene in core_genes:
+        mut_weight += sum([weights.get(int(x[1:-1]),1)
+                    for x in n['branch_attrs']['mutations'].get(gene,[])
+                    ])
 
     score += mut_weight/(4 + mut_weight)
     return score
@@ -113,8 +122,13 @@ def assign_clade(n, clade, key):
             assign_clade(c, clade, key)
     n['node_attrs'][key] = {'value': clade}
 
-def assign_new_clades_to_branches(n, hierarchy, old_key, new_key, new_clades=None, cutoff=1.0):
-    if n["node_attrs"]['score']['value']>cutoff:
+def assign_new_clades_to_branches(n, hierarchy, old_key, new_key, new_clades=None,
+                                  cutoff=1.0, divergence_addition=None, divergence_base=0):
+    if divergence_addition:
+        div_score = divergence_addition*(n['div']-divergence_base)/((n['div']-divergence_base)+4)*n['tip_score']
+    else: div_score=0
+    if n["node_attrs"]['score']['value'] + div_score > cutoff:
+        divergence_base=n['div']
         if 'labels' not in n['branch_attrs']:
             n['branch_attrs']['labels'] = {}
 
@@ -134,7 +148,9 @@ def assign_new_clades_to_branches(n, hierarchy, old_key, new_key, new_clades=Non
     if 'children' in n:
         for c in n["children"]:
             hierarchy = assign_new_clades_to_branches(c, hierarchy, old_key, new_key,
-                                                new_clades=new_clades, cutoff=cutoff)
+                                new_clades=new_clades, cutoff=cutoff,
+                                divergence_addition=divergence_addition,
+                                divergence_base=divergence_base)
 
     return hierarchy
 
@@ -173,6 +189,20 @@ if __name__=="__main__":
 
     args = parser.parse_args()
 
+    if 'rsv' in args.lineage.lower():
+        all_genes = ['G', 'F', 'L', 'N', 'P', 'M']
+        core_genes = ['G', 'F']
+        tip_count_divergence_scale = 2
+        divergence_addition=2.0
+        cutoff=0.9
+    else:
+        all_genes = ['HA1', 'HA2']
+        core_genes = ['HA1']
+        tip_count_divergence_scale = 1
+        cutoff=0.85
+        divergence_addition=1.0
+
+
     with open(args.clade_map) as fh:
         old_to_new_clades = json.load(fh)
     with open(args.weights) as fh:
@@ -188,7 +218,7 @@ if __name__=="__main__":
     short_to_full_clades = {v[0]:v[1] for v in old_to_new_clades.values()}
 
     T = data["tree"]
-    max_date, min_date = 2030,2010
+    max_date, min_date = 2030,2000
     assign_alive(T, max_date=max_date, min_date=min_date)
 
     hierarchy = defaultdict(list)
@@ -207,19 +237,20 @@ if __name__=="__main__":
 
     hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
     T['div']=0
-    assign_divergence(T, ["HA1", "HA2"], args.old_key)
+    assign_divergence(T, core_genes, args.old_key)
     max_value = gather_tip_counts(T,
-                    lambda x:np.exp(-len(x['branch_attrs']['mutations'].get('HA1',[]))/1),
+                    lambda x:np.exp(-np.sum([len(x['branch_attrs']['mutations'].get(gene,[])) for gene in core_genes])/tip_count_divergence_scale),
                     ignore_backbone=args.add_to_existing)
 
     assign_score(T, score, weights=weights[args.lineage],
-                 ntip_scale=max_value, ignore_backbone=args.add_to_existing)
+                 ntip_scale=max_value, ignore_backbone=args.add_to_existing, genes=all_genes, core_genes=core_genes)
 
     copy_over_old_clades(T, args.old_key, args.new_key)
 
     new_clades = {}
     hierarchy = assign_new_clades_to_branches(T, hierarchy, args.old_key, args.new_key,
-                    new_clades=new_clades, cutoff=0.75)
+                    new_clades=new_clades, cutoff=cutoff, divergence_addition=divergence_addition,
+                    divergence_base=0.0)
 
     for new_clade in new_clades:
         clade_name = full_clade_to_short_name(new_clade, aliases)
@@ -233,4 +264,4 @@ if __name__=="__main__":
     data['meta']['colorings'].append({'key':"score", 'type':'continuous', 'title':"clade score"})
 
     with open(args.output, 'w') as fh:
-        json.dump(data, fh)
+        json.dump(data, fh, indent=0)

@@ -1,0 +1,52 @@
+
+
+rule fetch_and_rename:
+    input:
+        "config/{lineage}_old_to_new.json"
+    output:
+        "auspice/{prefix}renamed_{lineage}_{resolution}.json"
+    params:
+        key = "renamed_clade"
+    shell:
+        """
+        python3 scripts/rename_old_clades.py --lineage {wildcards.lineage} \
+                --resolution {wildcards.resolution} \
+                --clade-map {input} \
+                --key {params.key} \
+                --output {output}
+        """
+
+rule suggest_new_clades:
+    input:
+        renamed_auspice = "auspice/{prefix}renamed_{lineage}_{resolution}.json",
+        clade_map = "config/{lineage}_old_to_new.json",
+        weights = "config/weights.json",
+    output:
+        "auspice/{prefix}suggested_{lineage}_{resolution}.json"
+    params:
+        old_key = "renamed_clade",
+        new_key = "new_clade"
+    shell:
+        """
+        python3 scripts/add_new_clades.py --input {input.renamed_auspice} \
+                --clade-map {input.clade_map} \
+                --weights {input.weights} \
+                --lineage {wildcards.lineage} \
+                --add-to-existing \
+                --old-key {params.old_key} --new-key {params.new_key} \
+                --output {output}
+        """
+
+
+rule add_provenance:
+    input:
+        "auspice/{prefix}suggested_{lineage}_{resolution}.json"
+    output:
+        "auspice/{prefix}with-provenance_{lineage}_{resolution}.json"
+    params:
+        key = "new_clade"
+    shell:
+        """
+        python3 scripts/add_provenance.py --input {input} --key {params.key}\
+                --output {output}
+        """
