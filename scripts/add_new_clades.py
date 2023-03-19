@@ -46,7 +46,9 @@ def assign_divergence(n, genes=['HA1'], key=None):
         n['div'] = 0
     if "children" in n:
         for c in n["children"]:
-            c['div'] = n['div'] + sum([len(c['branch_attrs']['mutations'].get(gene,[])) for gene in genes])
+            c['div'] = n['div'] + sum([
+                  len([x for x in c['branch_attrs']['mutations'].get(gene,[]) if x[-1] not in ['-', 'X']])
+                for gene in genes])
             assign_divergence(c, genes, key)
 
 
@@ -105,7 +107,7 @@ def score(n, weights=None, ntip_scale=1, ignore_backbone=False, genes=None, core
     mut_weight = 0
     for gene in core_genes:
         mut_weight += sum([weights.get(int(x[1:-1]),1)
-                    for x in n['branch_attrs']['mutations'].get(gene,[])
+                    for x in n['branch_attrs']['mutations'].get(gene,[]) if x[-1] not in ['-', 'X']
                     ])
 
     score += mut_weight/(4 + mut_weight)
@@ -196,11 +198,13 @@ if __name__=="__main__":
         core_genes = ['G', 'F']
         tip_count_divergence_scale = 3.0
         divergence_addition=1.0
+        max_date, min_date = 2030,2000
         cutoff=1.2
     else:
         all_genes = ['HA1', 'HA2']
         core_genes = ['HA1']
         tip_count_divergence_scale = 1
+        max_date, min_date = 2030,2020
         cutoff=0.85
         divergence_addition=1.0
 
@@ -220,7 +224,6 @@ if __name__=="__main__":
     short_to_full_clades = {v[0]:v[1] for v in old_to_new_clades.values()}
 
     T = data["tree"]
-    max_date, min_date = 2030,2000
     assign_alive(T, max_date=max_date, min_date=min_date)
 
     hierarchy = defaultdict(list)
@@ -246,7 +249,8 @@ if __name__=="__main__":
                     ignore_backbone=args.add_to_existing)
 
     assign_score(T, score, weights=weights[args.lineage],
-                 ntip_scale=max_value, ignore_backbone=args.add_to_existing, genes=all_genes, core_genes=core_genes)
+                 ntip_scale=max_value, ignore_backbone=args.add_to_existing,
+                 genes=all_genes, core_genes=core_genes)
 
     copy_over_old_clades(T, args.old_key, args.new_key)
 
