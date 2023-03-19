@@ -62,25 +62,27 @@ def assign_alive(n, max_date, min_date):
         n['alive'] = 1 if numdate<max_date and numdate>min_date else 0
 
 
-def gather_tip_counts(n, attenuate=None, max_value=0, ignore_backbone=False):
+def gather_tip_counts(n, distance=None, scale=1, max_value=0, ignore_backbone=False):
     '''
     Assigns a node attribute "ntips" to each node that counts the number of downstream tips.
-    This can be attenuated similar to the LBI calculation.
+    This can be distanced similar to the LBI calculation.
     '''
     if "children" in n:
         tmp = 0
         for c in n["children"]:
-            tmp_max = gather_tip_counts(c, attenuate=attenuate,
+            tmp_max = gather_tip_counts(c, distance=distance, scale=scale,
                         max_value=max_value, ignore_backbone=ignore_backbone)
             if (ignore_backbone and c["backbone"])==False:
-                tmp += c["ntips"]*attenuate(c)
+                tmp += c["ntips"]*np.exp(-distance(c)/scale)
+                tmp += (1-np.exp(-distance(c)/scale))*scale
 
             if tmp_max>max_value:
                 max_value = tmp_max
         n["ntips"] = tmp
     else:
-        n["ntips"] = 1 if n['alive'] else 0
+        n["ntips"] = scale*(1-np.exp(-distance(n)/scale)) if n['alive'] else 0
 
+    n['node_attrs']["phylo"] = {'value': n["ntips"]}
     max_value = n["ntips"] if n["ntips"]>max_value else max_value
 
     return max_value
@@ -93,7 +95,7 @@ def score(n, weights=None, ntip_scale=1, ignore_backbone=False, genes=None, core
     if core_genes is None:
         core_genes = []
 
-    n['tip_score'] = np.sqrt(max(0,n['ntips']-1)/ntip_scale)
+    n['tip_score'] = np.sqrt(n['ntips']/ntip_scale)
     if ignore_backbone and n['backbone']:
         return 0.0
     elif sum([len(n['branch_attrs']['mutations'].get(gene,[])) for gene in genes])==0:
@@ -192,9 +194,9 @@ if __name__=="__main__":
     if 'rsv' in args.lineage.lower():
         all_genes = ['G', 'F', 'L', 'N', 'P', 'M']
         core_genes = ['G', 'F']
-        tip_count_divergence_scale = 2
-        divergence_addition=2.0
-        cutoff=0.9
+        tip_count_divergence_scale = 3.0
+        divergence_addition=1.0
+        cutoff=1.2
     else:
         all_genes = ['HA1', 'HA2']
         core_genes = ['HA1']
@@ -239,7 +241,8 @@ if __name__=="__main__":
     T['div']=0
     assign_divergence(T, core_genes, args.old_key)
     max_value = gather_tip_counts(T,
-                    lambda x:np.exp(-np.sum([len(x['branch_attrs']['mutations'].get(gene,[])) for gene in core_genes])/tip_count_divergence_scale),
+                    lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[]) if y[-1] not in ['N', '-']]),
+                    scale=tip_count_divergence_scale,
                     ignore_backbone=args.add_to_existing)
 
     assign_score(T, score, weights=weights[args.lineage],
@@ -262,6 +265,7 @@ if __name__=="__main__":
 
     data['meta']['colorings'].append({'key':args.new_key, 'type':'ordinal', 'title':args.new_key})
     data['meta']['colorings'].append({'key':"score", 'type':'continuous', 'title':"clade score"})
+    data['meta']['colorings'].append({'key':"phylo", 'type':'continuous', 'title':"phylo_weight"})
 
     with open(args.output, 'w') as fh:
         json.dump(data, fh, indent=0)
