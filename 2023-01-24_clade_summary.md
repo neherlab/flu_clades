@@ -13,44 +13,44 @@ These clades can be assigned to HA sequences using [Nextclade](https://clades.ne
 ### Subclades
 
  * **Clade 1**
-    * additional mutations: G186S, S198P
+    * additional substitutions: G186S, S198P
     * vaccine strain: A/Tasmania/503/2020
     * **Clade 1a**
-        * additional mutations: K171N
+        * additional substitutions: K171N
         * vaccine strain: A/Cambodia/e0826360/2020
         * **Clade 1a.1**
-            * additional mutations: I48T
+            * additional substitutions: I48T
             * comment: almost exclusively in China
 
  * **Clade 2**
-    * additional mutations: Y159N, T160I, L164Q, G186D, D190N
+    * additional substitutions: Y159N, T160I, L164Q, G186D, D190N
     * comment: descendants dominate outside of China
 
     * **Clade 2a**
-        * additional mutations: H156S, diversity at 53[N/G]
+        * additional substitutions: H156S, diversity at 53[N/G]
         * vaccine strain: A/Darwin/6/2021
         * **Clade 2a.1**:
-            * additional mutations: D53G, D104G, K276R
+            * additional substitutions: D53G, D104G, K276R
             * **Clade 2a.1a**
-                * additional mutations: L157I, K220R
+                * additional substitutions: L157I, K220R
             * **Clade 2a.1b**
-                * additional mutations: I140K, R299K
+                * additional substitutions: I140K, R299K
         * **Clade 2a.2**:
-            * additional mutations: D53G, R201L, S219Y
+            * additional substitutions: D53G, R201L, S219Y
         * **Clade 2a.3**:
-            * additional mutations: D53N, N96S, I192F
+            * additional substitutions: D53N, N96S, I192F
             * **Clade 2a.3a**:
-                * additional mutations: E50K
+                * additional substitutions: E50K
             * **Clade 2a.3a**:
-                * additional mutations: I140M
+                * additional substitutions: I140M
     * **Clade 2b**:
-        * additional mutations: E50K, F79V, I140K
+        * additional substitutions: E50K, F79V, I140K
         * comment: has grown recently, 140K and 50K
     * **Clade 2c**:
-        * additional mutations: S205F, A212T
+        * additional substitutions: S205F, A212T
         * comment: mostly extinct
     * **Clade 2d**:
-        * additional mutations: G62R, H156Q, S199P
+        * additional substitutions: G62R, H156Q, S199P
         * comment: mostly extinct
 
 ## H1N1pdm
