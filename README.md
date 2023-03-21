@@ -19,7 +19,7 @@ The proposal below seems to work well.
 
 To single out clades in the tree that are of sufficient size and are phylogenetically distinct, we propose a measure similar to the LBI.
 ```math
-\phi_n = \sum_{c\in n} d(1-e^{l_c/d}) +  \phi_c e^{l_c/d}
+\phi_n = \sum_{c\in n} d(1-e^{-l_c/d}) +  \phi_c e^{-l_c/d}
 ```
 where $l_c$ is the length of the branch leading to child node $c$ and $d$ is a distance scale determining how rapidly this score is "forgotten" along the tree.
 Terminal nodes have $\phi_c=0$.
@@ -44,7 +44,7 @@ The sum of weights $w_n$ of a branch $n$ is transformed to a value between 0 and
 Divergence is a simple count of amino acid mutations in a subset of proteins (HA1 for influenza) along the tree since the last clade breakpoint.
 For each node $n$, this count $b_n$ is transformed to a value between 0 and 1 via
 ```math
-\delta_n = \psi_n\frac{b_n}{4+b_n}
+\delta_n = \psi_n\frac{b_n}{b_n+4}
 ```
 The multiplication of the divergence with the phylogenetic score ensure that assignments triggered by the divergence criteria tend to mark sizeable clades.
 Otherwise, gradual increase of divergence would trigger clade designations in undesired places.
@@ -56,6 +56,6 @@ New clades are assigned by walking through the tree in pre-order (parents before
 \psi_n + \beta_n + \delta_b > \theta_n
 ```
 The current value for the threshold in the A/H3N2 clade assignment is $\theta=0.85$.
-This means that mutations on a branch alone are insufficient to trigger a clade assignment unless their weight sums to more than 22.
+This means that mutations on a branch alone are insufficient to trigger a clade assignment unless their weights sum to more than 22.
 But together with a phylogenetic score, the threshold can be crossed.
 
