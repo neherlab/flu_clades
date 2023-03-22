@@ -46,14 +46,15 @@ For each node $n$, this count $b_n$ is transformed to a value between 0 and 1 vi
 ```math
 \delta_n = \psi_n\frac{b_n}{b_n+4}
 ```
-The multiplication of the divergence with the phylogenetic score ensure that assignments triggered by the divergence criteria tend to mark sizeable clades.
+The multiplication of the divergence with the phylogenetic score $\psi_n$ basically turns this contribution off for branches that don't represent sizable clades.
+This ensures that assignments triggered by the divergence criteria tend to mark clades only with a certain minimal size and bushy-ness.
 Otherwise, gradual increase of divergence would trigger clade designations in undesired places.
 
 ## Clade assignment
 
 New clades are assigned by walking through the tree in pre-order (parents before children) and a new clade is designated if the sum of scores exceeds a certain threshold $\theta$.
 ```math
-\psi_n + \beta_n + \delta_b > \theta_n
+\psi_n + \beta_n + \delta_b > \theta
 ```
 The current value for the threshold in the A/H3N2 clade assignment is $\theta=0.85$.
 This means that mutations on a branch alone are insufficient to trigger a clade assignment unless their weights sum to more than 22.
