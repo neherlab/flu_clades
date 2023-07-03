@@ -211,12 +211,12 @@ if __name__=="__main__":
     if 'rsv' in args.lineage.lower():
         all_genes = ['G', 'F', 'L', 'N', 'P', 'M']
         core_genes = ['G', 'F']
-        tip_count_divergence_scale = 10.0
+        tip_count_divergence_scale = 5.0
         divergence_addition=0.7
         max_date, min_date = 2030,1990
         cutoff=1.0
         divergence_scale=20
-        branch_length_scale = 4
+        branch_length_scale = 8
         min_size = 10
     else:
         all_genes = ['HA1', 'HA2']

@@ -2,7 +2,7 @@
 
 rule fetch_and_rename:
     input:
-        "config/rsv-a_old_to_new.json"
+        "config/{lineage}_old_to_new.json"
     output:
         "auspice/{prefix}renamed_{lineage}.json"
     params:
