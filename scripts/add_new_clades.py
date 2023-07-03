@@ -112,9 +112,11 @@ def score(n, weights=None, bushiness_scale=1, ignore_backbone=False,
     score = n['tip_score']
     mut_weight = 0
     for gene in core_genes:
-        mut_weight += sum([weights.get(int(x[1:-1]),1)
-                    for x in n['branch_attrs']['mutations'].get(gene,[]) if x[-1] not in ['-', 'X']
-                    ])
+        w = weights.get(gene, {})
+        for x in n['branch_attrs']['mutations'].get(gene,[]):
+            if x[-1] in ['-', 'X']: continue
+            pos = int(x[1:-1])
+            mut_weight += w[pos] if pos in w else w.get("default", 1)
 
     score += mut_weight/(branch_length_scale + mut_weight)
     return score
@@ -138,9 +140,9 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
     if divergence_addition:
         div_score = divergence_addition*(n['div']-divergence_base)/((n['div']-divergence_base)+divergence_scale)*n['tip_score']
     else: div_score=0
-    #print(n["node_attrs"]['score']['value'],  div_score, cutoff)
-    if n["node_attrs"]['score']['value'] + div_score > cutoff and n["ntips"]>min_size:
-        print('thres')
+
+    if (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size):
+        print('thres', n["ntips"], min_size)
         divergence_base=n['div']
         if 'labels' not in n['branch_attrs']:
             n['branch_attrs']['labels'] = {}
@@ -165,7 +167,8 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
             hierarchy = assign_new_clades_to_branches(c, hierarchy, new_key,
                                 new_clades=new_clades, cutoff=cutoff,
                                 divergence_addition=divergence_addition,
-                                divergence_base=divergence_base)
+                                divergence_base=divergence_base, divergence_scale=4,
+                                min_size=min_size)
 
     return hierarchy
 
@@ -278,6 +281,7 @@ if __name__=="__main__":
                  genes=all_genes, core_genes=core_genes, branch_length_scale=branch_length_scale)
 
     new_clades = {}
+    print(min_size)
     hierarchy = assign_new_clades_to_branches(T, hierarchy, args.new_key,
                     new_clades=new_clades, cutoff=cutoff, divergence_addition=divergence_addition,
                     divergence_base=0.0, divergence_scale=divergence_scale, min_size=min_size)
