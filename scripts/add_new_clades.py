@@ -161,9 +161,9 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
     '''
     if divergence_addition:
         delta_div = n['div']-divergence_base  # calculate the divergence since the parent
-        div_score = divergence_addition*delta_div/(delta_div+divergence_scale)*n['node_attrs']['tip_score']['value']
+        div_score = divergence_addition*delta_div/(delta_div+divergence_scale)
     else: div_score=0
-
+    n["node_attrs"]['div_score'] = {'value': div_score}
     if (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size):
         if 'labels' not in n['branch_attrs']:
             n['branch_attrs']['labels'] = {}
@@ -246,10 +246,10 @@ if __name__=="__main__":
     if 'rsv' in args.lineage.lower():
         all_genes = ['G', 'F', 'L', 'N', 'P', 'M']
         core_genes = ['G', 'F']
-        tip_count_divergence_scale = 5.0
-        divergence_addition=0.7
+        tip_count_divergence_scale = 10.0
+        divergence_addition=1.0
         max_date, min_date = 2030,1990
-        cutoff=1.0
+        cutoff=1.3
         divergence_scale=20
         branch_length_scale = 8
         min_size = 10
@@ -305,7 +305,7 @@ if __name__=="__main__":
 
     hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
     T['div']=0
-    assign_divergence(T, core_genes, args.old_key if args.add_to_existing else None)
+    assign_divergence(T, ['nuc'], args.old_key if args.add_to_existing else None)
     max_value = gather_tip_counts(T,
                     lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[]) if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']]),
                     scale=tip_count_divergence_scale,
@@ -333,6 +333,7 @@ if __name__=="__main__":
     data['meta']['colorings'].append({'key':"score", 'type':'continuous', 'title':"clade score"})
     data['meta']['colorings'].append({'key':"phylo", 'type':'continuous', 'title':"phylo_weight"})
     data['meta']['colorings'].append({'key':"tip_score", 'type':'continuous', 'title':"phylo_score"})
+    data['meta']['colorings'].append({'key':"div_score", 'type':'continuous', 'title':"div_score"})
     data['meta']['colorings'].append({'key':"branch_score", 'type':'continuous', 'title':"branch_score"})
     data['meta']['filters'].append('new_clade')
 
