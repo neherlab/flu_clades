@@ -65,13 +65,11 @@ def get_existing_clade_labels(tree, key):
     return clades, full_clades
 
 
-def assign_divergence(n, genes=['HA1'], key=None):
+def assign_divergence(n, genes=['HA1']):
     '''
-    Assigns a node attribute "div" to each node that counts the number of mutations since the root of the tree
-    or the last clade label
+    Assigns a node attribute "div" to each node that counts the number of mutations
+    since the root of the tree
     '''
-    # if key and key in n["branch_attrs"].get("labels",{}):
-    #     n['div'] = 0  # reset divergence to clade label
     if "children" in n:
         for c in n["children"]:
             c['div'] = n['div']
@@ -79,10 +77,10 @@ def assign_divergence(n, genes=['HA1'], key=None):
                 bad_states = ['-', 'N'] if gene=='nuc' else ['X', '-']
                 c['div'] += len([x for x in c['branch_attrs']['mutations'].get(gene,[])
                                 if x[0] not in bad_states or x[-1] not in bad_states])
-            assign_divergence(c, genes, key)
+            assign_divergence(c, genes)
 
 
-def calc_phylo_score(n, distance=None, scale=1, ignore_backbone=False):
+def calc_phylo_score(n, distance=None, ignore_backbone=False):
     '''
     Assigns a node attribute "bushiness" to each node that counts the number of downstream tips.
     This can be distanced similar to the LBI calculation.
@@ -91,12 +89,12 @@ def calc_phylo_score(n, distance=None, scale=1, ignore_backbone=False):
         n["bushiness"] = 0
         n["ntips"] = 0
         for c in n["children"]:
-            calc_phylo_score(c, distance=distance, scale=scale,
-                             ignore_backbone=ignore_backbone)
+            calc_phylo_score(c, distance=distance, ignore_backbone=ignore_backbone)
 
             if (ignore_backbone and c["backbone"])==False:
-                n["bushiness"] += c["bushiness"]*np.exp(-distance(c)/scale)
-                n["bushiness"] += (1-np.exp(-distance(c)/scale)) if c['alive'] else 0
+                n["bushiness"] += c["bushiness"]*np.exp(-distance(c))
+                n["bushiness"] += (1-np.exp(-distance(c))) if c['alive'] else 0
+
             n["ntips"] += c["ntips"]
     else:
         n["bushiness"] = 1 if n['alive'] else 0
@@ -106,6 +104,9 @@ def calc_phylo_score(n, distance=None, scale=1, ignore_backbone=False):
 
 
 def calc_phylo_scale(T):
+    '''
+    Calculates the phylogenetic scale of the tree as the median bushiness of all internal nodes
+    '''
     def collect_recursive(n, values):
         if "children" in n and len(n["children"])>0:
             for c in n["children"]:
@@ -115,7 +116,8 @@ def calc_phylo_scale(T):
 
     values = []
     collect_recursive(T, values)
-    return np.median(values)
+    from scipy.stats import scoreatpercentile
+    return scoreatpercentile(values,80)
 
 
 def score(n, weights=None, bushiness_scale=1, ignore_backbone=False,
@@ -247,6 +249,52 @@ def full_clade_to_short_name(full_clade, aliases):
 
     return '.'.join([str(x) for x in full_clade])
 
+def get_clade_map(fname):
+    if fname is None:
+        return {}, {}
+
+    aliases = {}
+    with open(fname) as fh:
+        old_to_new_clades = json.load(fh)
+    for k,v in old_to_new_clades.items():
+        if len(v[0])==1:
+            aliases[tuple(v[1])] = v[0]
+    short_to_full_clades = {v[0]:v[1] for v in old_to_new_clades.values()}
+
+    return short_to_full_clades, aliases
+
+def get_tree(fname, max_date=None, min_date=None, add_to_existing=False, old_key=None, new_key=None):
+    with open(fname) as fh:
+        data = json.load(fh)
+
+    T = data["tree"]
+    prepare_tree(T, max_date=max_date, min_date=min_date)
+    T['div']=0
+    assign_divergence(T, ['nuc'])
+
+    hierarchy = defaultdict(list)
+    if add_to_existing:
+        print("adding existing clades")
+        existing_clades, existing_full_clades = get_existing_clade_labels(T, old_key)
+        for full_clade in existing_full_clades:
+            if len(full_clade)>1:
+                hierarchy[full_clade[:-1]].append(full_clade[-1])
+            if full_clade not in hierarchy:
+                hierarchy[full_clade] = []
+        copy_over_old_clades(T, old_key, new_key)
+        label_backbone(T, old_key)
+    else:
+        hierarchy[('A',)] = ['A']
+        print("skipping existing clades")
+        # set root to be clade A
+        T['node_attrs'][f'full_{args.new_key}'] = hierarchy[('A',)]
+        assign_clade(T, hierarchy[('A',)], f"full_{new_key}")
+        assign_clade(T, 'A', new_key)
+
+    hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
+
+    return data, T, hierarchy
+
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser(description="Assign clades to a tree")
@@ -266,7 +314,7 @@ if __name__=="__main__":
         proteins = ['G', 'F', 'L', 'N', 'P', 'M']
         max_date, min_date = 2030,1990
         cutoff=1.3
-        bushiness_scale = 10.0
+        bushiness_branch_scale = 10.0
         divergence_scale = 20
         branch_length_scale = 8
         divergence_addition = 1.0
@@ -275,62 +323,26 @@ if __name__=="__main__":
         proteins = ['HA1', 'HA2'] if args.segment == 'ha' else ['NA']
         max_date, min_date = 2030,2020
         cutoff=1.0
-        bushiness_scale = 1
+        bushiness_branch_scale = 1
         divergence_scale = 8
         branch_length_scale = 4
         divergence_addition = 1.0
         min_size = 20
 
+    short_to_full_clades, aliases = get_clade_map(args.clade_map)
 
-    with open(args.clade_map) as fh:
-        old_to_new_clades = json.load(fh)
     with open(args.weights) as fh:
         weights = json.load(fh)
 
-    with open(args.input) as fh:
-        data = json.load(fh)
+    data, T, hierarchy = get_tree(args.input, max_date=max_date, min_date=min_date,
+                            add_to_existing=args.add_to_existing,
+                            old_key=args.old_key, new_key=args.new_key)
 
-    aliases = {}
-    for k,v in old_to_new_clades.items():
-        if len(v[0])==1:
-            aliases[tuple(v[1])] = v[0]
-    short_to_full_clades = {v[0]:v[1] for v in old_to_new_clades.values()}
-
-    T = data["tree"]
-    prepare_tree(T, max_date=max_date, min_date=min_date)
-
-    hierarchy = defaultdict(list)
-    if args.add_to_existing:
-        print("adding existing clades")
-        existing_clades, existing_full_clades = get_existing_clade_labels(T, args.old_key)
-
-        major_clades = sorted(set([x[0] for x in existing_clades]))
-        for full_clade in existing_full_clades:
-            if len(full_clade)>1:
-                hierarchy[full_clade[:-1]].append(full_clade[-1])
-            if full_clade not in hierarchy:
-                hierarchy[full_clade] = []
-        copy_over_old_clades(T, args.old_key, args.new_key)
-        label_backbone(T, args.old_key)
-    else:
-        hierarchy[('A',)] = ['A']
-        print("skipping existing clades")
-        T['node_attrs'][f'full_{args.new_key}'] = hierarchy[('A',)]
-        assign_clade(T, hierarchy[('A',)], f"full_{args.new_key}")
-        assign_clade(T, 'A', args.new_key)
-
-
-    hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
-
-    T['div']=0
-    assign_divergence(T, ['nuc'], args.old_key if args.add_to_existing else None)
 
     # nucleotide branch length excluding gaps and N
     branch_length_function = lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[])
-                                           if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']])
-    calc_phylo_score(T, branch_length_function,
-                scale=bushiness_scale,
-                ignore_backbone=args.add_to_existing)
+                                           if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']])/bushiness_branch_scale
+    calc_phylo_score(T, branch_length_function, ignore_backbone=args.add_to_existing)
 
     bushiness_scale = calc_phylo_scale(T)
     print("phylo_score_scale", bushiness_scale)
@@ -349,12 +361,13 @@ if __name__=="__main__":
         if "labels" not in n["branch_attrs"]: n["branch_attrs"]["labels"] = {}
         n["branch_attrs"]["labels"][args.new_key] = clade_name
         assign_clade(n, clade_name, args.new_key)
-        print("suggested clade:", clade_name, {k:v for k, v in n["branch_attrs"]["mutations"].items() if k!='nuc'})
+        print("suggested clade:", clade_name,
+              {k:v for k, v in n["branch_attrs"]["mutations"].items() if k!='nuc'})
 
     data['meta']['colorings'].append({'key':args.new_key, 'type':'ordinal', 'title':args.new_key})
     data['meta']['colorings'].append({'key':"score", 'type':'continuous', 'title':"clade score"})
-    data['meta']['colorings'].append({'key':"phylo", 'type':'continuous', 'title':"phylo_weight"})
-    data['meta']['colorings'].append({'key':"tip_score", 'type':'continuous', 'title':"phylo_score"})
+    data['meta']['colorings'].append({'key':"bushiness_raw", 'type':'continuous', 'title':"phylo_score_raw"})
+    data['meta']['colorings'].append({'key':"bushiness", 'type':'continuous', 'title':"phylo_score"})
     data['meta']['colorings'].append({'key':"div_score", 'type':'continuous', 'title':"div_score"})
     data['meta']['colorings'].append({'key':"branch_score", 'type':'continuous', 'title':"branch_score"})
     data['meta']['filters'].append('new_clade')
