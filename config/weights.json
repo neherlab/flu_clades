@@ -52,7 +52,10 @@
             "278": 2,
             "299": 2,
             "307": 2
-        }},
+        },
+        "HA2":{"default":1},
+        "NA":{"default":1}
+    },
     "h1n1pdm": {"HA1": {
             "default": 1,
             "124": 2,
@@ -105,9 +108,12 @@
             "73": 2,
             "74": 2,
             "75": 2
-    }},
-    "vic":   {"HA1":{"default":1}},
-    "yam":   {"HA1":{"default":1}},
+        },
+    "HA2":{"default":1},
+    "NA":{"default":1}
+    },
+    "vic":   {"HA1":{"default":1}, "HA2":{"default":1}, "NA":{"default":1}},
+    "yam":   {"HA1":{"default":1}, "HA2":{"default":1}, "NA":{"default":1}},
     "rsv-a": {"G":{"default": 1}, "F":{"default":3} },
     "rsv-b": {"G":{"default": 1}, "F":{"default":3} }
 }

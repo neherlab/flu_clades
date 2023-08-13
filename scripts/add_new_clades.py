@@ -3,6 +3,26 @@ from collections import defaultdict
 import numpy as np
 
 
+def prepare_tree(n, max_date, min_date):
+    '''
+    Assigns a node attribute "alive" to 1 if the node is within the date rate, 0 otherwise.
+    '''
+    if "children" in n:
+        tmp_alive = False
+        for c in n["children"]:
+            prepare_tree(c, max_date, min_date)
+            tmp_alive = tmp_alive or c['alive']
+        n['alive'] = tmp_alive
+    else:
+        try:
+            numdate = n['node_attrs']['num_date']['value']
+            n['alive'] = 1 if numdate<max_date and numdate>min_date else 0
+        except:
+            n['alive'] = 1
+
+    n['clade_break_point'] = False
+
+
 def label_backbone(tree, key):
     '''
     This function labels all branches/nodes from the root to existing clade labels
@@ -24,6 +44,7 @@ def label_backbone(tree, key):
 
     label_backbone_recursive(tree, key)
 
+
 def get_existing_clade_labels(tree, key):
     '''
     Returns a list of existing clade labels in the tree.
@@ -43,6 +64,7 @@ def get_existing_clade_labels(tree, key):
     add_clades(tree, clades, full_clades, key)
     return clades, full_clades
 
+
 def assign_divergence(n, genes=['HA1'], key=None):
     '''
     Assigns a node attribute "div" to each node that counts the number of mutations since the root of the tree
@@ -60,22 +82,7 @@ def assign_divergence(n, genes=['HA1'], key=None):
             assign_divergence(c, genes, key)
 
 
-def prepare_tree(n, max_date, min_date):
-    '''
-    Assigns a node attribute "alive" to 1 if the node is within the date rate, 0 otherwise.
-    '''
-    if "children" in n:
-        for c in n["children"]:
-            prepare_tree(c, max_date, min_date)
-    else:
-        try:
-            numdate = n['node_attrs']['num_date']['value']
-            n['alive'] = 1 if numdate<max_date and numdate>min_date else 0
-        except:
-            n['alive'] = 1
-    n['clade_break_point'] = False
-
-def gather_tip_counts(n, distance=None, scale=1, max_value=0, ignore_backbone=False):
+def calc_phylo_score(n, distance=None, scale=1, ignore_backbone=False):
     '''
     Assigns a node attribute "bushiness" to each node that counts the number of downstream tips.
     This can be distanced similar to the LBI calculation.
@@ -84,53 +91,62 @@ def gather_tip_counts(n, distance=None, scale=1, max_value=0, ignore_backbone=Fa
         n["bushiness"] = 0
         n["ntips"] = 0
         for c in n["children"]:
-            tmp_max = gather_tip_counts(c, distance=distance, scale=scale,
-                        max_value=max_value, ignore_backbone=ignore_backbone)
-            if tmp_max>max_value:
-                max_value = tmp_max
+            calc_phylo_score(c, distance=distance, scale=scale,
+                             ignore_backbone=ignore_backbone)
 
             if (ignore_backbone and c["backbone"])==False:
                 n["bushiness"] += c["bushiness"]*np.exp(-distance(c)/scale)
-                n["bushiness"] += (1-np.exp(-distance(c)/scale))
+                n["bushiness"] += (1-np.exp(-distance(c)/scale)) if c['alive'] else 0
             n["ntips"] += c["ntips"]
     else:
-        n["bushiness"] = (1-np.exp(-distance(n)/scale)) if n['alive'] else 0
+        n["bushiness"] = 1 if n['alive'] else 0
         n["ntips"] = 1
 
-    n['node_attrs']["phylo"] = {'value': n["bushiness"]}
-    max_value = n["bushiness"] if n["bushiness"]>max_value else max_value
+    n['node_attrs']["bushiness_raw"] = {'value': n["bushiness"]}
 
-    return max_value
+
+def calc_phylo_scale(T):
+    def collect_recursive(n, values):
+        if "children" in n and len(n["children"])>0:
+            for c in n["children"]:
+                collect_recursive(c, values)
+            if n['alive']: # only include alive nodes and skip terminals
+                values.append(n["bushiness"])
+
+    values = []
+    collect_recursive(T, values)
+    return np.median(values)
+
 
 def score(n, weights=None, bushiness_scale=1, ignore_backbone=False,
-          genes=None, core_genes=None, branch_length_scale=4):
+          proteins=None, branch_length_scale=4):
     '''
-    Assign a score to each node that combines the phylogenetic score and the branchlength
+    Assign a score to each node that combines the phylogenetic score and the branch length
     '''
     if weights is None:
         weights = {}
-    if genes is None:
-        genes = []
-    if core_genes is None:
-        core_genes = []
+    if proteins is None:
+        proteins = []
 
     score = n["bushiness"]/(n["bushiness"] + bushiness_scale)
-    n['node_attrs']['tip_score'] = {'value': score}
+    n['node_attrs']['bushiness'] = {'value': score}
 
     mut_weight = 0
-    for gene in core_genes:
-        w = weights.get(gene, {})
-        for x in n['branch_attrs']['mutations'].get(gene,[]):
+    for cds in proteins:
+        w = weights.get(cds, {})
+        for x in n['branch_attrs']['mutations'].get(cds,[]):
             if x[-1] in ['-', 'X']: continue
             pos = int(x[1:-1])
-            mut_weight += w[pos] if pos in w else w.get("default", 1)
+            mut_weight += w[pos] if pos in w else w.get("default", 0)
 
     n['node_attrs']['branch_score'] = {'value': mut_weight/(branch_length_scale + mut_weight)}
     score += mut_weight/(branch_length_scale + mut_weight)
 
+    # return 0 if the node is on the backbone and we are ignoring backbone nodes
     if ignore_backbone and n['backbone']:
         return 0.0
-    if sum([len(n['branch_attrs']['mutations'].get(gene,[])) for gene in genes])==0:
+    # return 0 if there are no mutations in the proteins of interest
+    if sum([len(n['branch_attrs']['mutations'].get(cds,[])) for cds in proteins])==0:
         return 0.0
 
     return score
@@ -145,12 +161,14 @@ def assign_score(n, score=None, **kwargs):
             assign_score(c, score=score, **kwargs)
     n['node_attrs']["score"] = {'value': score(n, **kwargs)}
 
+
 def assign_clade(n, clade, key):
     '''Assign a clade to a node and recursively to all its children'''
     if "children" in n:
         for c in n["children"]:
             assign_clade(c, clade, key)
     n['node_attrs'][key] = {'value': clade}
+
 
 def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
                                   cutoff=1.0, divergence_addition=None, divergence_base=0,
@@ -163,6 +181,7 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
         delta_div = n['div']-divergence_base  # calculate the divergence since the parent
         div_score = divergence_addition*delta_div/(delta_div+divergence_scale)
     else: div_score=0
+
     n["node_attrs"]['div_score'] = {'value': div_score}
     if (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size):
         if 'labels' not in n['branch_attrs']:
@@ -186,12 +205,10 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
         new_clades[new_clade] = n
         assign_clade(n, new_clade, f"full_{new_key}")
         n["clade_break_point"] = True  # mark as clade break_point
-        # else:
-        #     print(n['node_attrs'], hierarchy)
 
     # reset divergence to clade break point.
     if n['clade_break_point']:
-        print(n['div'], n['branch_attrs'].get('labels',{}))
+        # print(n['div'] - divergence_base, n['branch_attrs'].get('labels',{}))
         divergence_base=n['div']
 
     if 'children' in n:
@@ -227,6 +244,7 @@ def full_clade_to_short_name(full_clade, aliases):
             if len(full_parent)<len(full_clade):
                 clade_name += '.' + '.'.join([str(x) for x in full_clade[len(full_parent):]])
             return clade_name
+
     return '.'.join([str(x) for x in full_clade])
 
 if __name__=="__main__":
@@ -234,6 +252,7 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Assign clades to a tree")
     parser.add_argument('--input', help="json to assign clades to")
     parser.add_argument('--lineage', default='h3n2', help="json to assign clades to")
+    parser.add_argument('--segment', default='ha', help="json to assign clades to")
     parser.add_argument('--add-to-existing', action='store_true', help="respect old clades")
     parser.add_argument('--clade-map',help="json with renamed clades")
     parser.add_argument('--weights',help="json with mutation weights")
@@ -244,25 +263,23 @@ if __name__=="__main__":
     args = parser.parse_args()
 
     if 'rsv' in args.lineage.lower():
-        all_genes = ['G', 'F', 'L', 'N', 'P', 'M']
-        core_genes = ['G', 'F']
-        tip_count_divergence_scale = 10.0
-        divergence_addition=1.0
+        proteins = ['G', 'F', 'L', 'N', 'P', 'M']
         max_date, min_date = 2030,1990
         cutoff=1.3
-        divergence_scale=20
+        bushiness_scale = 10.0
+        divergence_scale = 20
         branch_length_scale = 8
+        divergence_addition = 1.0
         min_size = 10
     else:
-        all_genes = ['HA1', 'HA2']
-        core_genes = ['HA1']
-        tip_count_divergence_scale = 1
+        proteins = ['HA1', 'HA2'] if args.segment == 'ha' else ['NA']
         max_date, min_date = 2030,2020
-        cutoff=0.85
-        divergence_addition=1.0
-        divergence_scale=4
+        cutoff=1.0
+        bushiness_scale = 1
+        divergence_scale = 8
         branch_length_scale = 4
-        min_size = 5
+        divergence_addition = 1.0
+        min_size = 20
 
 
     with open(args.clade_map) as fh:
@@ -304,19 +321,24 @@ if __name__=="__main__":
 
 
     hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
+
     T['div']=0
     assign_divergence(T, ['nuc'], args.old_key if args.add_to_existing else None)
-    max_value = gather_tip_counts(T,
-                    lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[]) if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']]),
-                    scale=tip_count_divergence_scale,
-                    ignore_backbone=args.add_to_existing)
-    print("phylo_score_max", max_value)
+
+    # nucleotide branch length excluding gaps and N
+    branch_length_function = lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[])
+                                           if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']])
+    calc_phylo_score(T, branch_length_function,
+                scale=bushiness_scale,
+                ignore_backbone=args.add_to_existing)
+
+    bushiness_scale = calc_phylo_scale(T)
+    print("phylo_score_scale", bushiness_scale)
     assign_score(T, score, weights=weights[args.lineage],
-                 bushiness_scale=max_value*0.25, ignore_backbone=args.add_to_existing,
-                 genes=all_genes, core_genes=core_genes, branch_length_scale=branch_length_scale)
+                 bushiness_scale=bushiness_scale, ignore_backbone=args.add_to_existing,
+                 proteins=proteins, branch_length_scale=branch_length_scale)
 
     new_clades = {}
-    print(min_size)
     hierarchy = assign_new_clades_to_branches(T, hierarchy, args.new_key,
                     new_clades=new_clades, cutoff=cutoff, divergence_addition=divergence_addition,
                     divergence_base=0.0, divergence_scale=divergence_scale, min_size=min_size)
