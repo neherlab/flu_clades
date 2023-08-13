@@ -183,8 +183,8 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
         delta_div = n['div']-divergence_base  # calculate the divergence since the parent
         div_score = divergence_addition*delta_div/(delta_div+divergence_scale)
     else: div_score=0
-
     n["node_attrs"]['div_score'] = {'value': div_score}
+
     if (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size):
         if 'labels' not in n['branch_attrs']:
             n['branch_attrs']['labels'] = {}
@@ -215,14 +215,13 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
 
     if 'children' in n:
         for c in n["children"]:
-            hierarchy = assign_new_clades_to_branches(c, hierarchy, new_key,
+            assign_new_clades_to_branches(c, hierarchy, new_key,
                                 new_clades=new_clades, cutoff=cutoff,
                                 divergence_addition=divergence_addition,
                                 divergence_base=divergence_base,
                                 divergence_scale=divergence_scale,
                                 min_size=min_size)
 
-    return hierarchy
 
 def copy_over_old_clades(tree, old_key, new_key):
     def copy_recursive(n,old_key, new_key):
@@ -346,18 +345,21 @@ if __name__=="__main__":
     branch_length_function = lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[])
                                            if y[-1] not in ['N', '-'] and y[0] not in ['N', '-']])/bushiness_branch_scale
     calc_phylo_score(T, branch_length_function, ignore_backbone=args.add_to_existing)
-
     bushiness_scale = calc_phylo_scale(T)
     print("phylo_score_scale", bushiness_scale)
+
+    # compute aggregate score from branches and phylo/bushiness
     assign_score(T, score, weights=weights[args.lineage],
                  bushiness_scale=bushiness_scale, ignore_backbone=args.add_to_existing,
                  proteins=proteins, branch_length_scale=branch_length_scale)
 
+    # assign clades while also taking into account the divergence, modifies hierarchy and new_clades in place
     new_clades = {}
-    hierarchy = assign_new_clades_to_branches(T, hierarchy, args.new_key,
-                    new_clades=new_clades, cutoff=cutoff, divergence_addition=divergence_addition,
-                    divergence_base=0.0, divergence_scale=divergence_scale, min_size=min_size)
+    assign_new_clades_to_branches(T, hierarchy, args.new_key,
+        new_clades=new_clades, cutoff=cutoff, divergence_addition=divergence_addition,
+        divergence_base=0.0, divergence_scale=divergence_scale, min_size=min_size)
 
+    # process and assign human readable clade names
     for new_clade in new_clades:
         clade_name = full_clade_to_short_name(new_clade, aliases)
         n = new_clades[new_clade]
@@ -367,6 +369,7 @@ if __name__=="__main__":
         print("suggested clade:", clade_name,
               {k:v for k, v in n["branch_attrs"]["mutations"].items() if k!='nuc'})
 
+    # export
     data['meta']['colorings'].append({'key':args.new_key, 'type':'ordinal', 'title':args.new_key})
     data['meta']['colorings'].append({'key':"score", 'type':'continuous', 'title':"clade score"})
     data['meta']['colorings'].append({'key':"bushiness_raw", 'type':'continuous', 'title':"phylo_score_raw"})
