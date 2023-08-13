@@ -329,7 +329,10 @@ if __name__=="__main__":
         divergence_addition = 1.0
         min_size = 20
 
-    short_to_full_clades, aliases = get_clade_map(args.clade_map)
+    if args.add_to_existing:
+        short_to_full_clades, aliases = get_clade_map(args.clade_map)
+    else:
+        short_to_full_clades, aliases = {}, {}
 
     with open(args.weights) as fh:
         weights = json.load(fh)
