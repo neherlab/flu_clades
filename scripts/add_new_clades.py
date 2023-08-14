@@ -185,7 +185,13 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
     else: div_score=0
     n["node_attrs"]['div_score'] = {'value': div_score}
 
-    if (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size):
+    trigger = (n["node_attrs"]['score']['value'] + div_score > cutoff) and (n["ntips"]>min_size)
+    if trigger:
+        potential_div = n['div']
+        child_triggers = [((c["node_attrs"]['score']['value'] + (c['div']-potential_div)/((c['div']-potential_div) +divergence_scale) > cutoff) and (c["ntips"]>min_size)) for c in n["children"]]
+        one_daughter = sum(child_triggers)==1
+
+    if trigger and (not one_daughter):
         if 'labels' not in n['branch_attrs']:
             n['branch_attrs']['labels'] = {}
 

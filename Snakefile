@@ -58,7 +58,7 @@ from datetime import date
 today = date.today().strftime('%Y-%m-%d')
 rule all:
     input:
-        expand("auspice/{prefix}with-provenance_{lineage}_{resolution}_{segment}.json",
+        expand("auspice/{prefix}suggested_{lineage}_{resolution}_{segment}.json",
                 prefix = [today+'_'],
                 lineage = ['h3n2', 'h1n1pdm', 'vic'],
                 resolution = ['2y', '6y'],
