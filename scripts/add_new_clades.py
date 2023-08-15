@@ -2,17 +2,29 @@ import json, argparse
 from collections import defaultdict
 import numpy as np
 
+def is_nonterminal(n):
+    return "children" in n and len(n["children"])
+
+def is_terminal(n):
+    return not is_nonterminal(n)
 
 def prepare_tree(n, max_date, min_date):
     '''
     Assigns a node attribute "alive" to 1 if the node is within the date rate, 0 otherwise.
     '''
-    if "children" in n:
+    if is_nonterminal(n):
         tmp_alive = False
+        new_children = []
         for c in n["children"]:
             prepare_tree(c, max_date, min_date)
+            if len(c['branch_attrs']['mutations'].get('nuc',[])) or is_terminal(c):
+                new_children.append(c)
+            else:
+                new_children.extend(c['children'])
+
             tmp_alive = tmp_alive or c['alive']
         n['alive'] = tmp_alive
+        n['children'] = new_children
     else:
         try:
             numdate = n['node_attrs']['num_date']['value']
@@ -31,7 +43,7 @@ def label_backbone(tree, key):
     '''
     def label_backbone_recursive(n, key):
         on_backbone = False
-        if "children" in n:
+        if is_nonterminal(n):
             for c in n["children"]:
                 label_backbone_recursive(c, key)
                 if c["backbone"]:
@@ -70,13 +82,13 @@ def assign_divergence(n, genes=['HA1']):
     Assigns a node attribute "div" to each node that counts the number of mutations
     since the root of the tree
     '''
-    if "children" in n:
+    if is_nonterminal(n):
         for c in n["children"]:
             c['div'] = n['div']
             for gene in genes:
                 bad_states = ['-', 'N'] if gene=='nuc' else ['X', '-']
                 c['div'] += len([x for x in c['branch_attrs']['mutations'].get(gene,[])
-                                if x[0] not in bad_states or x[-1] not in bad_states])
+                                if (x[0] not in bad_states) or (x[-1] not in bad_states)])
             assign_divergence(c, genes)
 
 
@@ -85,7 +97,7 @@ def calc_phylo_score(n, distance=None, ignore_backbone=False):
     Assigns a node attribute "bushiness" to each node that counts the number of downstream tips.
     This can be distanced similar to the LBI calculation.
     '''
-    if "children" in n:
+    if is_nonterminal(n):
         n["bushiness"] = 0
         n["ntips"] = 0
         for c in n["children"]:
@@ -96,6 +108,7 @@ def calc_phylo_score(n, distance=None, ignore_backbone=False):
                 n["bushiness"] += (1-np.exp(-distance(c))) if c['alive'] else 0
 
             n["ntips"] += c["ntips"]
+        n["children"] = sorted(n["children"], key=lambda x:x['ntips'])
     else:
         n["bushiness"] = 1 if n['alive'] else 0
         n["ntips"] = 1
@@ -158,7 +171,7 @@ def assign_score(n, score=None, **kwargs):
     '''
     recursively assign the clade demarcation score to each branch
     '''
-    if "children" in n:
+    if is_nonterminal(n):
         for c in n["children"]:
             assign_score(c, score=score, **kwargs)
     n['node_attrs']["score"] = {'value': score(n, **kwargs)}
@@ -166,7 +179,7 @@ def assign_score(n, score=None, **kwargs):
 
 def assign_clade(n, clade, key):
     '''Assign a clade to a node and recursively to all its children'''
-    if "children" in n:
+    if is_nonterminal(n):
         for c in n["children"]:
             assign_clade(c, clade, key)
     n['node_attrs'][key] = {'value': clade}
@@ -238,7 +251,7 @@ def copy_over_old_clades(tree, old_key, new_key):
             n["branch_attrs"]["labels"][new_key] = n["branch_attrs"]["labels"][old_key]
             n['clade_break_point'] = True
 
-        if "children" in n:
+        if is_nonterminal(n):
             for c in n["children"]:
                 copy_recursive(c, old_key, new_key)
 
