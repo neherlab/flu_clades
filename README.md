@@ -67,7 +67,7 @@ New clades are assigned by walking through the tree in pre-order (parents before
 ```math
 \psi_n + \beta_n + \delta_b > \theta
 ```
-The current value for the threshold in the A/H3N2 clade assignment is $\theta=1.0$.
+The current value for the threshold in the influenza virus lineage assignment is $\theta=1.0$.
 This means any one score alone is insufficient to trigger a new lineage.
 But together with a phylogenetic score and the divergence contribution, the threshold can be crossed for a single HA1 mutation.
 
