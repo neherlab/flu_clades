@@ -213,6 +213,7 @@ def assign_new_clades_to_branches(n, hierarchy, new_key, new_clades=None,
         if parent_clade in hierarchy:
             # determine the number of existing children of the parent and the index of the new subclade
             new_suffix = len(hierarchy[parent_clade])+1
+            print(parent_clade, hierarchy[parent_clade], new_suffix)
             if new_suffix>2: # consistency check
                 assert new_suffix==hierarchy[parent_clade][-1]+1
 
@@ -281,6 +282,12 @@ def get_clade_map(fname):
 
     return short_to_full_clades, aliases
 
+def add_aliases(fname, aliases):
+    with open(fname) as fh:
+        new_aliases = json.load(fh)
+    for k,v in new_aliases.items():
+        aliases[tuple(v)] = k
+
 def get_tree(fname, max_date=None, min_date=None, add_to_existing=False, old_key=None, new_key=None):
     with open(fname) as fh:
         data = json.load(fh)
@@ -302,11 +309,11 @@ def get_tree(fname, max_date=None, min_date=None, add_to_existing=False, old_key
         copy_over_old_clades(T, old_key, new_key)
         label_backbone(T, old_key)
     else:
-        hierarchy[('A',)] = ['A']
+        hierarchy[('A',)] = []
         print("skipping existing clades")
         # set root to be clade A
-        T['node_attrs'][f'full_{args.new_key}'] = hierarchy[('A',)]
-        assign_clade(T, hierarchy[('A',)], f"full_{new_key}")
+        T['node_attrs'][f'full_{args.new_key}'] = ('A',)
+        assign_clade(T, ('A',), f"full_{new_key}")
         assign_clade(T, 'A', new_key)
 
     hierarchy = {k:sorted(hierarchy[k]) for k in sorted(hierarchy.keys())}
@@ -321,6 +328,7 @@ if __name__=="__main__":
     parser.add_argument('--segment', default='ha', help="json to assign clades to")
     parser.add_argument('--add-to-existing', action='store_true', help="respect old clades")
     parser.add_argument('--clade-map',help="json with renamed clades")
+    parser.add_argument('--aliases',help="json with aliases")
     parser.add_argument('--weights',help="json with mutation weights")
     parser.add_argument("--old-key", type=str, help='name to save clades under')
     parser.add_argument("--new-key", type=str, help='name to save clades under')
@@ -351,6 +359,8 @@ if __name__=="__main__":
         short_to_full_clades, aliases = get_clade_map(args.clade_map)
     else:
         short_to_full_clades, aliases = {}, {}
+    if args.aliases:
+        add_aliases(args.aliases, aliases)
 
     with open(args.weights) as fh:
         weights = json.load(fh)
@@ -358,7 +368,6 @@ if __name__=="__main__":
     data, T, hierarchy = get_tree(args.input, max_date=max_date, min_date=min_date,
                             add_to_existing=args.add_to_existing,
                             old_key=args.old_key, new_key=args.new_key)
-
 
     # nucleotide branch length excluding gaps and N
     branch_length_function = lambda x:len([y for y in x['branch_attrs']['mutations'].get('nuc',[])
